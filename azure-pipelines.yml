@@ -2,14 +2,13 @@ trigger:
   branches:
     include:
       - main
-  tags:
-    include:
-      - v*
+      - dev
 
 pr:
   branches:
     include:
       - main
+      - dev
 
 pool:
   vmImage: 'windows-latest'
@@ -37,7 +36,7 @@ steps:
 
 - task: PowerShell@2
   name: SetVersion
-  displayName: 'Resolve version and tag metadata'
+  displayName: 'Resolve version metadata'
   inputs:
     targetType: 'inline'
     script: |
@@ -47,17 +46,23 @@ steps:
       $branch = "$(Build.SourceBranch)"
       $branchName = "$(Build.SourceBranchName)"
 
-      $packageVersion = $baseVersion
-      $releaseTag = ''
-      $isTagRelease = 'false'
-
-      if ($branch -like 'refs/tags/v*') {
-        $releaseTag = $branchName
-        $packageVersion = $branchName.TrimStart('v')
-        $isTagRelease = 'true'
+      if ($branch -eq "refs/heads/main") {
+        $packageVersion = "$baseVersion.$(Build.BuildId)"
+        $releaseTag = "v$packageVersion"
+        $isRelease = "true"
+        $isPreRelease = "false"
+      }
+      elseif ($branch -eq "refs/heads/dev") {
+        $packageVersion = "$baseVersion-dev.$(Build.BuildId)"
+        $releaseTag = "v$packageVersion"
+        $isRelease = "false"
+        $isPreRelease = "true"
       }
       else {
         $packageVersion = "$baseVersion-ci.$(Build.BuildId)"
+        $releaseTag = "v$packageVersion"
+        $isRelease = "false"
+        $isPreRelease = "true"
       }
 
       $assemblyVersion = "$baseVersion.0"
@@ -67,7 +72,20 @@ steps:
       Write-Host "##vso[task.setvariable variable=AssemblyVersion]$assemblyVersion"
       Write-Host "##vso[task.setvariable variable=FileVersion]$fileVersion"
       Write-Host "##vso[task.setvariable variable=ReleaseTag]$releaseTag"
-      Write-Host "##vso[task.setvariable variable=IsTagRelease]$isTagRelease"
+      Write-Host "##vso[task.setvariable variable=IsRelease]$isRelease"
+      Write-Host "##vso[task.setvariable variable=IsPreRelease]$isPreRelease"
+
+- task: PowerShell@2
+  displayName: 'Show resolved variables'
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "Build.SourceBranch = $(Build.SourceBranch)"
+      Write-Host "Build.SourceBranchName = $(Build.SourceBranchName)"
+      Write-Host "PackageVersion = $(PackageVersion)"
+      Write-Host "ReleaseTag = $(ReleaseTag)"
+      Write-Host "IsRelease = $(IsRelease)"
+      Write-Host "IsPreRelease = $(IsPreRelease)"
 
 - task: DotNetCoreCLI@2
   displayName: 'Restore'
@@ -117,19 +135,33 @@ steps:
       $ErrorActionPreference = 'Stop'
       $notesPath = "$(Build.ArtifactStagingDirectory)\release-notes.md"
 
-      $lines = @(
-        "# ClusterIQ $(PackageVersion)"
+      $header = @(
+        "# ClusterIQ $(PackageVersion)",
+        "",
+        "## Release Summary",
+        "- Self-contained single-file win-x64 build",
+        "- Built by Azure DevOps",
+        "- Intended for GitHub release distribution and in-app updater consumption",
+        "- Source branch: $(Build.SourceBranchName)",
         ""
-        "## Release Summary"
-        "- Self-contained single-file win-x64 build"
-        "- Built by Azure DevOps"
-        "- Intended for GitHub release distribution and in-app updater consumption"
-        ""
-        "## Notes"
-        "- Update this section later if you want custom notes per release."
       )
 
-      $lines | Set-Content $notesPath -Encoding UTF8
+      $sourceNotes = @()
+      if (Test-Path "$(Build.SourcesDirectory)\RELEASE_NOTES_v1.0.1.md") {
+        $sourceNotes = Get-Content "$(Build.SourcesDirectory)\RELEASE_NOTES_v1.0.1.md"
+      }
+      elseif (Test-Path "$(Build.SourcesDirectory)\CHANGELOG.md") {
+        $sourceNotes = Get-Content "$(Build.SourcesDirectory)\CHANGELOG.md"
+      }
+      else {
+        $sourceNotes = @(
+          "## Notes",
+          "- No repository release notes file was found.",
+          "- Consider maintaining RELEASE_NOTES_v1.0.1.md or CHANGELOG.md."
+        )
+      }
+
+      ($header + $sourceNotes) | Set-Content $notesPath -Encoding UTF8
 
 - task: PowerShell@2
   displayName: 'Package EXE, ZIP, and hashes'
@@ -140,6 +172,14 @@ steps:
 
       New-Item -ItemType Directory -Force -Path "$(packageRoot)" | Out-Null
       Copy-Item -Path "$(publishDir)\*" -Destination "$(packageRoot)" -Recurse -Force
+
+      if (Test-Path "$(Build.SourcesDirectory)\HVTools\Assets\ClusterIQ.ico") {
+        Copy-Item "$(Build.SourcesDirectory)\HVTools\Assets\ClusterIQ.ico" -Destination "$(packageRoot)" -Force
+      }
+
+      if (Test-Path "$(Build.ArtifactStagingDirectory)\release-notes.md") {
+        Copy-Item "$(Build.ArtifactStagingDirectory)\release-notes.md" -Destination (Join-Path "$(packageRoot)" "RELEASE_NOTES.md") -Force
+      }
 
       $exe = Get-ChildItem "$(publishDir)" -Filter "*.exe" | Select-Object -First 1
       if (-not $exe) { throw "No EXE found in publish output." }
@@ -171,7 +211,7 @@ steps:
 
 - task: GitHubRelease@1
   displayName: 'Create GitHub release and upload assets'
-  condition: and(succeeded(), eq(variables['IsTagRelease'], 'true'))
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   inputs:
     gitHubConnection: '$(gitHubServiceConnection)'
     repositoryName: '$(gitHubRepository)'
