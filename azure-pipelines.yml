@@ -23,8 +23,12 @@ variables:
   packageRoot: '$(Build.ArtifactStagingDirectory)\package\ClusterIQ'
   gitHubServiceConnection: 'ClusterIQ-GitHub'
   gitHubRepository: 'jaycalderwood/ClusterIQ'
+  packageBaseName: 'ClusterIQ'
 
 steps:
+- checkout: self
+  persistCredentials: true
+
 - task: UseDotNet@2
   displayName: 'Install .NET SDK $(dotnetSdkVersion)'
   inputs:
@@ -38,20 +42,19 @@ steps:
     targetType: 'inline'
     script: |
       $ErrorActionPreference = 'Stop'
-      $baseVersion = (Get-Content "$(Build.SourcesDirectory)\VERSION.txt" -Raw).Trim()
-      if ([string]::IsNullOrWhiteSpace($baseVersion)) { throw "VERSION.txt is empty." }
 
+      $baseVersion = '1.0.1'
       $branch = "$(Build.SourceBranch)"
       $branchName = "$(Build.SourceBranchName)"
 
       $packageVersion = $baseVersion
-      $releaseTag = ""
-      $isTagRelease = "false"
+      $releaseTag = ''
+      $isTagRelease = 'false'
 
-      if ($branch -like "refs/tags/v*") {
+      if ($branch -like 'refs/tags/v*') {
         $releaseTag = $branchName
         $packageVersion = $branchName.TrimStart('v')
-        $isTagRelease = "true"
+        $isTagRelease = 'true'
       }
       else {
         $packageVersion = "$baseVersion-ci.$(Build.BuildId)"
@@ -107,7 +110,29 @@ steps:
     modifyOutputPath: false
 
 - task: PowerShell@2
-  displayName: 'Package exe, zip, and hashes'
+  displayName: 'Generate release notes'
+  inputs:
+    targetType: 'inline'
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $notesPath = "$(Build.ArtifactStagingDirectory)\release-notes.md"
+
+      $lines = @(
+        "# ClusterIQ $(PackageVersion)"
+        ""
+        "## Release Summary"
+        "- Self-contained single-file win-x64 build"
+        "- Built by Azure DevOps"
+        "- Intended for GitHub release distribution and in-app updater consumption"
+        ""
+        "## Notes"
+        "- Update this section later if you want custom notes per release."
+      )
+
+      $lines | Set-Content $notesPath -Encoding UTF8
+
+- task: PowerShell@2
+  displayName: 'Package EXE, ZIP, and hashes'
   inputs:
     targetType: 'inline'
     script: |
@@ -116,33 +141,26 @@ steps:
       New-Item -ItemType Directory -Force -Path "$(packageRoot)" | Out-Null
       Copy-Item -Path "$(publishDir)\*" -Destination "$(packageRoot)" -Recurse -Force
 
-      if (Test-Path "$(Build.SourcesDirectory)\HVTools\Assets\ClusterIQ.ico") {
-        Copy-Item "$(Build.SourcesDirectory)\HVTools\Assets\ClusterIQ.ico" -Destination "$(packageRoot)" -Force
-      }
-
-      if (Test-Path "$(Build.SourcesDirectory)\docs\INSTALL.md") {
-        Copy-Item "$(Build.SourcesDirectory)\docs\INSTALL.md" -Destination (Join-Path "$(packageRoot)" "README.txt") -Force
-      }
-
       $exe = Get-ChildItem "$(publishDir)" -Filter "*.exe" | Select-Object -First 1
       if (-not $exe) { throw "No EXE found in publish output." }
 
-      $exeTarget = Join-Path "$(Build.ArtifactStagingDirectory)" ("ClusterIQ_" + "$(PackageVersion)" + "_win-x64.exe")
+      $exeTarget = Join-Path "$(Build.ArtifactStagingDirectory)" ("$(packageBaseName)_" + "$(PackageVersion)" + "_win-x64.exe")
       Copy-Item $exe.FullName $exeTarget -Force
 
-      $zipTarget = Join-Path "$(Build.ArtifactStagingDirectory)" ("ClusterIQ_" + "$(PackageVersion)" + "_win-x64.zip")
+      $zipTarget = Join-Path "$(Build.ArtifactStagingDirectory)" ("$(packageBaseName)_" + "$(PackageVersion)" + "_win-x64.zip")
       if (Test-Path $zipTarget) { Remove-Item $zipTarget -Force }
       Compress-Archive -Path "$(packageRoot)\*" -DestinationPath $zipTarget -Force
 
       $hashExe = (Get-FileHash $exeTarget -Algorithm SHA256).Hash
       $hashZip = (Get-FileHash $zipTarget -Algorithm SHA256).Hash
+
       @(
-        "PackageVersion=$(PackageVersion)",
-        "EXE=$([IO.Path]::GetFileName($exeTarget))",
-        "EXE_SHA256=$hashExe",
-        "ZIP=$([IO.Path]::GetFileName($zipTarget))",
+        "PackageVersion=$(PackageVersion)"
+        "EXE=$([IO.Path]::GetFileName($exeTarget))"
+        "EXE_SHA256=$hashExe"
+        "ZIP=$([IO.Path]::GetFileName($zipTarget))"
         "ZIP_SHA256=$hashZip"
-      ) | Set-Content (Join-Path "$(Build.ArtifactStagingDirectory)" "release-metadata.txt")
+      ) | Set-Content (Join-Path "$(Build.ArtifactStagingDirectory)" "release-metadata.txt") -Encoding UTF8
 
 - task: PublishBuildArtifacts@1
   displayName: 'Publish build artifacts'
@@ -163,12 +181,12 @@ steps:
     tag: '$(ReleaseTag)'
     title: 'ClusterIQ $(PackageVersion)'
     releaseNotesSource: 'filePath'
-    releaseNotesFilePath: '$(Build.SourcesDirectory)\RELEASE_NOTES_v1.0.1.md'
+    releaseNotesFilePath: '$(Build.ArtifactStagingDirectory)\release-notes.md'
     assets: |
       $(Build.ArtifactStagingDirectory)\ClusterIQ_$(PackageVersion)_win-x64.exe
       $(Build.ArtifactStagingDirectory)\ClusterIQ_$(PackageVersion)_win-x64.zip
       $(Build.ArtifactStagingDirectory)\release-metadata.txt
     isDraft: false
     isPreRelease: false
-    makeLatest: 'true'
+    makeLatest: true
     addChangeLog: true
