@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# User / IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+
+# Packages / archives
+*.zip
+*.nupkg
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Local secrets / machine-specific
+appsettings.Development.json
+*.pfx
+*.snk

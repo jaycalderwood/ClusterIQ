@@ -1,0 +1,813 @@
+<Window x:Class="HVTools.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:HVTools.ViewModels"
+        xmlns:conv="clr-namespace:HVTools.Converters"
+        xmlns:models="clr-namespace:HVTools.Models"
+        Title="ClusterIQ v1.0 — Hyper-V, Azure Local &amp; Arc Intelligence"
+        Height="820" Width="1500" MinWidth="1200" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBgBrush}">
+
+    <Window.Resources>
+        <conv:SeverityToColorConverter         x:Key="SevColor"/>
+        <conv:PowerStateToColorConverter       x:Key="PwrColor"/>
+        <conv:PowerStateForegroundConverter    x:Key="PwrFg"/>
+        <conv:BoolToYesNoConverter             x:Key="BoolYesNo"/>
+        <conv:HealthSevToIconConverter         x:Key="SevIcon"/>
+        <conv:InvertBoolConverter              x:Key="InvertBool"/>
+        <conv:UpdateReadinessToColorConverter  x:Key="UpdateColor"/>
+        <conv:ThemeIconConverter               x:Key="ThemeIcon"/>
+        <conv:ArcStatusToColorConverter        x:Key="ArcColor"/>
+        <BooleanToVisibilityConverter          x:Key="BoolVis"/>
+
+        <!-- DataGrid base style -->
+        <Style TargetType="DataGrid" x:Key="IG">
+            <Setter Property="AutoGenerateColumns"       Value="False"/>
+            <Setter Property="CanUserAddRows"            Value="False"/>
+            <Setter Property="CanUserDeleteRows"         Value="False"/>
+            <Setter Property="IsReadOnly"                Value="True"/>
+            <Setter Property="GridLinesVisibility"       Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush"  Value="{DynamicResource GridLineBrush}"/>
+            <Setter Property="BorderThickness"           Value="0"/>
+            <Setter Property="Background"                Value="{DynamicResource GridRowBrush}"/>
+            <Setter Property="RowBackground"             Value="{DynamicResource GridRowBrush}"/>
+            <Setter Property="AlternatingRowBackground"  Value="{DynamicResource GridAltRowBrush}"/>
+            <Setter Property="Foreground"                Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="FontFamily"                Value="Segoe UI"/>
+            <Setter Property="FontSize"                  Value="12"/>
+            <Setter Property="SelectionMode"             Value="Extended"/>
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <Setter Property="EnableRowVirtualization"   Value="True"/>
+            <Setter Property="EnableColumnVirtualization" Value="True"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background"    Value="{DynamicResource GridHeaderBgBrush}"/>
+            <Setter Property="Foreground"    Value="{DynamicResource GridHeaderFgBrush}"/>
+            <Setter Property="FontWeight"    Value="SemiBold"/>
+            <Setter Property="FontSize"      Value="11"/>
+            <Setter Property="Padding"       Value="8,6"/>
+            <Setter Property="BorderBrush"   Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+
+        <Style TargetType="TabItem" x:Key="HvTab">
+            <Setter Property="Padding"       Value="12,8"/>
+            <Setter Property="FontSize"      Value="12"/>
+            <Setter Property="FontFamily"    Value="Segoe UI"/>
+            <Setter Property="Foreground"    Value="{DynamicResource TabInactiveFgBrush}"/>
+            <Setter Property="Background"    Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TabActiveFgBrush}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="Button" x:Key="Btn">
+            <Setter Property="Padding"         Value="10,4"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource InputBorderBrush}"/>
+            <Setter Property="Background"      Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Height"          Value="28"/>
+        </Style>
+
+        <Style TargetType="Button" x:Key="PrimaryBtn" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background"  Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+
+        <Style TargetType="TextBox" x:Key="Input">
+            <Setter Property="Height"             Value="26"/>
+            <Setter Property="FontSize"           Value="12"/>
+            <Setter Property="Padding"            Value="6,4"/>
+            <Setter Property="BorderBrush"        Value="{DynamicResource InputBorderBrush}"/>
+            <Setter Property="BorderThickness"    Value="1"/>
+            <Setter Property="Background"         Value="{DynamicResource InputBgBrush}"/>
+            <Setter Property="Foreground"         Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style TargetType="Border" x:Key="MetricCard">
+            <Setter Property="Background"      Value="{DynamicResource MetricCardBgBrush}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="6"/>
+            <Setter Property="Padding"         Value="14,8"/>
+            <Setter Property="Margin"          Value="0,0,8,0"/>
+            <Setter Property="MinWidth"        Value="80"/>
+        </Style>
+
+        <!-- Cluster session list item style -->
+        <Style TargetType="ListBoxItem" x:Key="SessionItem">
+            <Setter Property="Padding"       Value="8,6"/>
+            <Setter Property="Cursor"        Value="Hand"/>
+            <Setter Property="Background"    Value="Transparent"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SidebarItemHoverBg}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SidebarItemActiveBg}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+
+        <!-- ═══════════════════════════════════════════
+             TITLE BAR
+        ═══════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TitleBarBrush}" Height="36">
+            <DockPanel Margin="12,0">
+                <Border Background="{DynamicResource AccentBrush}" CornerRadius="3"
+                        Padding="6,2" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <TextBlock Text="HV" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                </Border>
+                <TextBlock Text="ClusterIQ  v1.0 — Hyper-V &amp; Azure Local Inventory"
+                           Foreground="White" FontSize="13" VerticalAlignment="Center"/>
+                <!-- Dark mode toggle -->
+                <Button Content="{Binding IsDarkMode, Converter={StaticResource ThemeIcon}}"
+                        Style="{StaticResource Btn}"
+                        Command="{Binding ToggleDarkModeCommand}"
+                        DockPanel.Dock="Right" HorizontalAlignment="Right"
+                        Margin="0,4" Width="32" Height="28"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="White" FontSize="14" ToolTip="Toggle dark mode"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════
+             TOOLBAR / CONNECTION BAR
+        ═══════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource ToolbarBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,5">
+            <WrapPanel VerticalAlignment="Center">
+                <TextBlock Text="Host / Cluster:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="0,0,6,0"/>
+                <TextBox Text="{Binding TargetHost, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource Input}" Width="180"/>
+                <TextBlock Text="User:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="10,0,6,0"/>
+                <TextBox Text="{Binding Username}" Style="{StaticResource Input}" Width="130"
+                         IsEnabled="{Binding UseCurrentUser, Converter={StaticResource InvertBool}}"/>
+                <TextBlock Text="Pass:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="8,0,6,0"/>
+                <PasswordBox x:Name="PasswordBox" Width="110" Height="26" FontSize="12"
+                             Padding="6,4" BorderBrush="{DynamicResource InputBorderBrush}"
+                             BorderThickness="1" Background="{DynamicResource InputBgBrush}"
+                             Foreground="{DynamicResource ForegroundBrush}" CaretBrush="{DynamicResource ForegroundBrush}"
+                             IsEnabled="{Binding UseCurrentUser, Converter={StaticResource InvertBool}}"/>
+                <CheckBox Content="Current user" IsChecked="{Binding UseCurrentUser}"
+                          VerticalAlignment="Center" Margin="8,0" FontSize="12"
+                          Foreground="{DynamicResource ForegroundBrush}"/>
+<CheckBox Content="Save connection" IsChecked="{Binding SaveConnectionInfo}"
+          VerticalAlignment="Center" Margin="8,0" FontSize="12"
+          Foreground="{DynamicResource ForegroundBrush}"
+          ToolTip="Saves connection settings on this workstation. Passwords are not stored."/>
+                <CheckBox Content="Connect Azure" IsChecked="{Binding ConnectAzure}"
+                          VerticalAlignment="Center" Margin="8,0,4,0" FontSize="12"
+                          Foreground="{DynamicResource ForegroundBrush}"/>
+                <TextBlock Text="Sub:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="6,0,4,0"/>
+                <TextBox Text="{Binding AzureSubscription}" Style="{StaticResource Input}" Width="150"
+                         IsEnabled="{Binding ConnectAzure}"/>
+                <TextBlock Text="RG:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="6,0,4,0"/>
+                <TextBox Text="{Binding AzureResourceGroup}" Style="{StaticResource Input}" Width="110"
+                         IsEnabled="{Binding ConnectAzure}" ToolTip="Optional. Leave blank to query all resource groups in the subscription."/>
+                <TextBlock Text="Tenant:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="6,0,4,0"/>
+                <TextBox Text="{Binding AzureTenantId}" Style="{StaticResource Input}" Width="110"
+                         IsEnabled="{Binding ConnectAzure}" ToolTip="Optional tenant ID for Azure authentication."/>
+
+<Separator Width="1" Height="20" Background="{DynamicResource BorderBrush}" Margin="8,0"/>
+<TextBlock Text="Profile:" VerticalAlignment="Center" FontSize="12"
+           Foreground="{DynamicResource MutedForegroundBrush}" Margin="0,0,6,0"/>
+<TextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Input}" Width="120"
+         ToolTip="Name for saved environment profile"/>
+<ComboBox ItemsSource="{Binding SavedProfiles}" SelectedItem="{Binding SelectedSavedProfile}" Width="170" Height="26" Margin="6,0,0,0"/>
+<Button Content="Save Profile" Style="{StaticResource Btn}" Margin="4,0"
+        Command="{Binding SaveCurrentProfileCommand}"/>
+<Button Content="Load Profile" Style="{StaticResource Btn}" Margin="2,0"
+        Command="{Binding LoadSelectedProfileCommand}"/>
+<Button Content="Delete Profile" Style="{StaticResource Btn}" Margin="2,0"
+        Command="{Binding DeleteSelectedProfileCommand}"/>
+<Button Content="Settings" Style="{StaticResource Btn}" Margin="6,0,0,0"
+        Click="SettingsButton_Click" ToolTip="Open unified settings"/>
+
+                <Button Content="+ Connect" Style="{StaticResource PrimaryBtn}" Margin="4,0"
+                        Click="ConnectButton_Click"/>
+                <Button Content="Disconnect" Style="{StaticResource Btn}" Margin="2,0"
+                        Command="{Binding DisconnectCommand}"
+                        IsEnabled="{Binding IsConnected}"/>
+                <Button Content="↻ Refresh" Style="{StaticResource Btn}" Margin="2,0"
+                        Command="{Binding CollectCommand}"
+                        IsEnabled="{Binding IsConnected}"/>
+
+                <Separator Width="1" Height="20" Background="{DynamicResource BorderBrush}" Margin="8,0"/>
+
+                <Button Content="⬇ XLSX" Style="{StaticResource Btn}" Margin="2,0"
+                        IsEnabled="{Binding IsConnected}" Click="ExportAllXlsx_Click"
+                        ToolTip="Export all tabs to XLSX"/>
+                <Button Content="⬇ Tab XLSX" Style="{StaticResource Btn}" Margin="2,0"
+                        IsEnabled="{Binding IsConnected}" Click="ExportTabXlsx_Click"
+                        ToolTip="Export current tab to XLSX"/>
+                <Button Content="⬇ Tab CSV" Style="{StaticResource Btn}" Margin="2,0"
+                        IsEnabled="{Binding IsConnected}" Click="ExportTabCsv_Click"
+                        ToolTip="Export current tab to CSV"/>
+                <Button Content="⬇ All CSV" Style="{StaticResource Btn}" Margin="2,0"
+                        IsEnabled="{Binding IsConnected}" Click="ExportAllCsv_Click"
+                        ToolTip="Export all tabs as CSV files to a folder"/>
+                <Button Content="?" Style="{StaticResource Btn}" Margin="8,0,2,0"
+                        Click="HelpButton_Click"
+                        ToolTip="Open product documentation"/>
+                <Button Content="About" Style="{StaticResource Btn}" Margin="2,0"
+                        Click="AboutButton_Click"
+                        ToolTip="About ClusterIQ"/>
+
+                <Separator Width="1" Height="20" Background="{DynamicResource BorderBrush}" Margin="8,0"/>
+
+                <!-- Status indicator -->
+                <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,5,0">
+                    <Ellipse.Style>
+                        <Style TargetType="Ellipse">
+                            <Setter Property="Fill" Value="#9CA3AF"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                    <Setter Property="Fill" Value="#22C55E"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Ellipse.Style>
+                </Ellipse>
+                <TextBlock Text="{Binding StatusText}" FontSize="11"
+                           Foreground="{DynamicResource MutedForegroundBrush}"
+                           VerticalAlignment="Center" MaxWidth="320"
+                           TextTrimming="CharacterEllipsis"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Progress -->
+        <ProgressBar DockPanel.Dock="Top" Height="3" Value="{Binding Progress}" Maximum="100"
+                     Foreground="{DynamicResource AccentBrush}" Background="Transparent"
+                     BorderThickness="0"
+                     Visibility="{Binding IsCollecting, Converter={StaticResource BoolVis}}"/>
+
+        <!-- ═══════════════════════════════════════════
+             METRICS BAR
+        ═══════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,7">
+            <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding TotalVMs}"  FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Total VMs"           FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding RunningVMs}" FontSize="20" FontWeight="SemiBold" Foreground="#16A34A" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Running"             FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding OffVMs}"    FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Off / Saved"         FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding HostCount}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Hosts"               FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding SnapshotCount}" FontSize="20" FontWeight="SemiBold" Foreground="#D97706" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Snapshots"           FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding HealthAlertCount}" FontSize="20" FontWeight="SemiBold" Foreground="#DC2626" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Alerts"              FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding PendingUpdateCount}" FontSize="20" FontWeight="SemiBold" Foreground="#7C3AED" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Nodes w/ Updates"   FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ClusterSessions.Count}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Connected Clusters" FontSize="10" Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceAltBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
+            <DockPanel>
+                <TextBlock Text="{Binding ConnectionBadge}" FontSize="11"
+                           Foreground="{DynamicResource MutedForegroundBrush}" Margin="0,0,16,0"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding StatusText}" FontSize="11"
+                               Foreground="{DynamicResource MutedForegroundBrush}"/>
+                    <TextBlock Text="   Last Refreshed: " FontSize="11" Margin="16,0,0,0"
+                               Foreground="{DynamicResource MutedForegroundBrush}"/>
+                    <TextBlock Text="{Binding LastRefreshedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" FontSize="11"
+                               Foreground="{DynamicResource MutedForegroundBrush}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════
+             MAIN AREA: SIDEBAR + TABS
+        ═══════════════════════════════════════════ -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" MinWidth="140" MaxWidth="260"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Cluster Sidebar ─────────────────────────────────── -->
+            <Border Grid.Column="0" Background="{DynamicResource SidebarBgBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Padding="10,8"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <TextBlock Text="CLUSTERS" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedForegroundBrush}"/>
+                    </Border>
+
+                    <ListBox ItemsSource="{Binding ClusterSessions}"
+                             Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource SessionItem}"/>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ClusterSession}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0"
+                                                MouseLeftButtonUp="SessionItem_Click"
+                                                Tag="{Binding}">
+                                        <TextBlock Text="{Binding ClusterName}" FontSize="12"
+                                                   Foreground="{DynamicResource ForegroundBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Status}" FontSize="10"
+                                                   Foreground="{DynamicResource MutedForegroundBrush}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="✕" Width="20" Height="20"
+                                            FontSize="10" Background="Transparent" BorderThickness="0"
+                                            Foreground="{DynamicResource MutedForegroundBrush}"
+                                            Cursor="Hand" Tag="{Binding}"
+                                            Click="RemoveSession_Click"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource BorderBrush}"/>
+
+            <!-- ── Tab Control ─────────────────────────────────────── -->
+            <TabControl Grid.Column="2" Background="{DynamicResource SurfaceBrush}"
+                        BorderThickness="0" SelectionChanged="TabControl_SelectionChanged">
+
+                <!-- vmInfo -->
+                <TabItem Header="vmInfo" ToolTip="Virtual machine inventory and actions" Style="{StaticResource HvTab}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+                            <DockPanel LastChildFill="False">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                    <TextBox x:Name="VmSearch" Style="{StaticResource Input}" Width="200"
+                                             TextChanged="SearchBox_TextChanged" Tag="vmInfo"/>
+                                    <TextBlock Text="  filter…" FontSize="11"
+                                               Foreground="{DynamicResource MutedForegroundBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                    <TextBlock Text="Target:" VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Foreground="{DynamicResource MutedForegroundBrush}" FontSize="11"/>
+                                    <ComboBox Width="140" Height="26"
+                                              ItemsSource="{Binding LiveMigrationHosts}"
+                                              SelectedItem="{Binding LiveMigrationTargetHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Margin="0,0,6,0"/>
+                                    <Button Content="Start VM" Style="{StaticResource Btn}" Margin="2,0"
+                                            Click="StartVmButton_Click" IsEnabled="{Binding IsConnected}"/>
+                                    <Button Content="Stop VM" Style="{StaticResource Btn}" Margin="2,0"
+                                            Click="StopVmButton_Click" IsEnabled="{Binding IsConnected}"/>
+                                    <Button Content="Restart VM" Style="{StaticResource Btn}" Margin="2,0"
+                                            Click="RestartVmButton_Click" IsEnabled="{Binding IsConnected}"/>
+                                    <Button Content="Live Migrate" Style="{StaticResource Btn}" Margin="2,0"
+                                            Click="LiveMigrateVmButton_Click" IsEnabled="{Binding IsConnected}"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding VmList}" SelectedItem="{Binding SelectedVm, Mode=TwoWay}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name"        Binding="{Binding Name}"           Width="160"/>
+                                <DataGridTemplateColumn Header="State"   Width="85">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="3" Padding="4,1" HorizontalAlignment="Left" Margin="2"
+                                                    Background="{Binding PowerState, Converter={StaticResource PwrColor}}">
+                                                <TextBlock Text="{Binding PowerState}" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{Binding PowerState, Converter={StaticResource PwrFg}}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Guest OS"    Binding="{Binding GuestOS}"         Width="170"/>
+                                <DataGridTextColumn Header="vCPU"        Binding="{Binding vCPU}"            Width="52"/>
+                                <DataGridTextColumn Header="Mem (GB)"    Binding="{Binding MemoryGB}"        Width="72"/>
+                                <DataGridTextColumn Header="Host"        Binding="{Binding Host}"            Width="130"/>
+                                <DataGridTextColumn Header="Cluster"     Binding="{Binding Cluster}"         Width="130"/>
+                                <DataGridTextColumn Header="Int. Svcs"   Binding="{Binding IntegrationServices}" Width="90"/>
+                                <DataGridTextColumn Header="IP"          Binding="{Binding PrimaryIP}"       Width="120"/>
+                                <DataGridTextColumn Header="Uptime"      Binding="{Binding Uptime}"          Width="100"/>
+                                <DataGridTextColumn Header="Snaps"       Binding="{Binding Checkpoints}"     Width="58"/>
+                                <DataGridTextColumn Header="Gen"         Binding="{Binding Generation}"      Width="45"/>
+                                <DataGridCheckBoxColumn Header="Clustered" Binding="{Binding IsClustered}"   Width="75"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- vmDisk -->
+                <TabItem Header="vmDisk" ToolTip="Virtual machine disk inventory and stats" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding DiskList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="VM"             Binding="{Binding VmName}"          Width="150"/>
+                            <DataGridTextColumn Header="#"              Binding="{Binding DiskNumber}"       Width="40"/>
+                            <DataGridTextColumn Header="Type"           Binding="{Binding DiskType}"         Width="65"/>
+                            <DataGridTextColumn Header="Format"         Binding="{Binding Format}"           Width="65"/>
+                            <DataGridTextColumn Header="Path"           Binding="{Binding Path}"             Width="300"/>
+                            <DataGridTextColumn Header="Size (GB)"      Binding="{Binding SizeGB}"           Width="78"/>
+                            <DataGridTextColumn Header="Used (GB)"      Binding="{Binding UsedGB}"           Width="78"/>
+                            <DataGridTextColumn Header="Controller"     Binding="{Binding Controller}"       Width="80"/>
+                            <DataGridTextColumn Header="IOPS Limit"     Binding="{Binding IopsLimit}"        Width="80"/>
+                            <DataGridCheckBoxColumn Header="Shared"     Binding="{Binding Shared}"           Width="60"/>
+                            <DataGridCheckBoxColumn Header="Fixed"      Binding="{Binding IsFixed}"          Width="55"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- vmNIC -->
+                <TabItem Header="vmNIC" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding NicList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="VM"           Binding="{Binding VmName}"      Width="150"/>
+                            <DataGridTextColumn Header="Adapter"      Binding="{Binding AdapterName}" Width="130"/>
+                            <DataGridTextColumn Header="MAC"          Binding="{Binding MacAddress}"  Width="130"/>
+                            <DataGridCheckBoxColumn Header="Dynamic"  Binding="{Binding DynamicMac}"  Width="65"/>
+                            <DataGridTextColumn Header="Switch"       Binding="{Binding SwitchName}"  Width="140"/>
+                            <DataGridTextColumn Header="VLAN"         Binding="{Binding VlanId}"      Width="60"/>
+                            <DataGridTextColumn Header="IP"           Binding="{Binding IpAddresses}" Width="150"/>
+                            <DataGridCheckBoxColumn Header="DHCP Guard" Binding="{Binding DhcpGuard}" Width="85"/>
+                            <DataGridCheckBoxColumn Header="Rtr Guard"  Binding="{Binding RouterGuard}" Width="80"/>
+                            <DataGridCheckBoxColumn Header="Connected"  Binding="{Binding IsConnected}" Width="80"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- vmSnapshot -->
+                <TabItem Header="vmSnapshot" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding SnapList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="VM"          Binding="{Binding VmName}"         Width="150"/>
+                            <DataGridTextColumn Header="Snapshot"    Binding="{Binding SnapshotName}"   Width="200"/>
+                            <DataGridTextColumn Header="Type"        Binding="{Binding SnapshotType}"   Width="100"/>
+                            <DataGridTextColumn Header="Created"     Binding="{Binding CreationTime, StringFormat='yyyy-MM-dd HH:mm'}" Width="130"/>
+                            <DataGridTextColumn Header="Age (d)"     Binding="{Binding AgeDays}"        Width="65"/>
+                            <DataGridTextColumn Header="Size (GB)"   Binding="{Binding SizeGB}"         Width="80"/>
+                            <DataGridTextColumn Header="Parent"      Binding="{Binding ParentSnapshotName}" Width="180"/>
+                            <DataGridTextColumn Header="Host"        Binding="{Binding Host}"           Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvHost -->
+                <TabItem Header="hvHost" ToolTip="Hyper-V host inventory and resource totals" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding HostList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Node"        Binding="{Binding NodeName}"         Width="140"/>
+                            <DataGridTextColumn Header="OS"          Binding="{Binding OperatingSystem}"  Width="190"/>
+                            <DataGridTextColumn Header="Build"       Binding="{Binding OsBuild}"          Width="70"/>
+                            <DataGridTextColumn Header="CPU"         Binding="{Binding CpuModel}"         Width="210"/>
+                            <DataGridTextColumn Header="Cores"       Binding="{Binding CoresTotal}"       Width="55"/>
+                            <DataGridTextColumn Header="RAM (GB)"    Binding="{Binding TotalRamGB}"       Width="75"/>
+                            <DataGridTextColumn Header="Used RAM"    Binding="{Binding UsedRamGB}"        Width="75"/>
+                            <DataGridTextColumn Header="VMs"         Binding="{Binding RunningVMs}"       Width="45"/>
+                            <DataGridTextColumn Header="HV Ver"      Binding="{Binding HyperVVersion}"    Width="90"/>
+                            <DataGridTextColumn Header="Status"      Binding="{Binding NodeStatus}"       Width="80"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvCluster -->
+                <TabItem Header="hvCluster" ToolTip="Cluster summary and node totals" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding ClusterList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Cluster"      Binding="{Binding ClusterName}"     Width="160"/>
+                            <DataGridTextColumn Header="Nodes"        Binding="{Binding NodeCount}"       Width="55"/>
+                            <DataGridTextColumn Header="Quorum"       Binding="{Binding QuorumType}"      Width="170"/>
+                            <DataGridTextColumn Header="CSV Vols"     Binding="{Binding CsvVolumeCount}"  Width="75"/>
+                            <DataGridTextColumn Header="vCPU"         Binding="{Binding TotalVCpu}"       Width="65"/>
+                            <DataGridTextColumn Header="RAM (GB)"     Binding="{Binding TotalRamGB}"      Width="85"/>
+                            <DataGridTextColumn Header="Running VMs"  Binding="{Binding RunningVMs}"      Width="90"/>
+                            <DataGridCheckBoxColumn Header="HA"       Binding="{Binding HAEnabled}"       Width="45"/>
+                            <DataGridCheckBoxColumn Header="S2D"      Binding="{Binding S2DEnabled}"      Width="45"/>
+                            <DataGridTextColumn Header="Status"       Binding="{Binding ClusterStatus}"   Width="90"/>
+                            <DataGridTextColumn Header="Func Level"   Binding="{Binding FunctionalLevel}" Width="90"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvStorage -->
+                <TabItem Header="hvStorage" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding StorageList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Volume"      Binding="{Binding VolumeName}"  Width="130"/>
+                            <DataGridTextColumn Header="Path"        Binding="{Binding CsvPath}"     Width="220"/>
+                            <DataGridTextColumn Header="Total (TB)"  Binding="{Binding TotalTB, StringFormat=F2}"  Width="80"/>
+                            <DataGridTextColumn Header="Used (TB)"   Binding="{Binding UsedTB,  StringFormat=F2}"  Width="80"/>
+                            <DataGridTextColumn Header="Free (TB)"   Binding="{Binding FreeTB,  StringFormat=F2}"  Width="80"/>
+                            <DataGridTextColumn Header="Used %"      Binding="{Binding UsedPercent}"               Width="65"/>
+                            <DataGridTextColumn Header="Resiliency"  Binding="{Binding ResiliencyType}"            Width="130"/>
+                            <DataGridTextColumn Header="VHDs"        Binding="{Binding VhdCount}"                  Width="55"/>
+                            <DataGridTextColumn Header="Health"      Binding="{Binding Health}"                    Width="90"/>
+                            <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerNode}"                 Width="120"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvSwitch -->
+                <TabItem Header="hvSwitch" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding SwitchList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Switch"     Binding="{Binding SwitchName}"      Width="160"/>
+                            <DataGridTextColumn Header="Type"       Binding="{Binding SwitchType}"      Width="80"/>
+                            <DataGridTextColumn Header="Bound NICs" Binding="{Binding BoundNics}"       Width="200"/>
+                            <DataGridTextColumn Header="VMs"        Binding="{Binding VmsConnected}"    Width="55"/>
+                            <DataGridCheckBoxColumn Header="SET"    Binding="{Binding SetTeaming}"      Width="50"/>
+                            <DataGridCheckBoxColumn Header="Mgmt OS" Binding="{Binding AllowManagementOS}" Width="70"/>
+                            <DataGridTextColumn Header="Nodes"      Binding="{Binding Nodes}"           Width="200"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvNIC -->
+                <TabItem Header="hvNIC" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding PhysNicList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Node"    Binding="{Binding NodeName}"     Width="130"/>
+                            <DataGridTextColumn Header="Adapter" Binding="{Binding AdapterName}"  Width="120"/>
+                            <DataGridTextColumn Header="MAC"     Binding="{Binding MacAddress}"   Width="130"/>
+                            <DataGridTextColumn Header="Speed"   Binding="{Binding Speed}"        Width="80"/>
+                            <DataGridTextColumn Header="Status"  Binding="{Binding LinkStatus}"   Width="70"/>
+                            <DataGridCheckBoxColumn Header="RDMA" Binding="{Binding RdmaEnabled}" Width="55"/>
+                            <DataGridTextColumn Header="Team"    Binding="{Binding TeamName}"     Width="140"/>
+                            <DataGridTextColumn Header="Desc."   Binding="{Binding Description}"  Width="220"/>
+                            <DataGridCheckBoxColumn Header="PFC" Binding="{Binding PfcEnabled}"   Width="50"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- hvHealth -->
+                <TabItem Header="hvHealth" Style="{StaticResource HvTab}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="HealthSearch" Style="{StaticResource Input}" Width="200"
+                                         TextChanged="SearchBox_TextChanged" Tag="hvHealth"/>
+                                <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0">
+                                    <Run Text="{Binding HealthList.Count, Mode=OneWay}"
+                                         Foreground="{DynamicResource ForegroundBrush}"/>
+                                    <Run Text=" findings" Foreground="{DynamicResource MutedForegroundBrush}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <ListBox ItemsSource="{Binding HealthList}" Background="{DynamicResource SurfaceBrush}"
+                                 BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="22"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="160"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="18" Height="18" CornerRadius="9" VerticalAlignment="Center"
+                                                    Background="{Binding Severity, Converter={StaticResource SevColor}}">
+                                                <TextBlock Text="{Binding Severity, Converter={StaticResource SevIcon}}"
+                                                           FontSize="10" FontWeight="Bold" Foreground="White"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="10,0">
+                                                <TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource ForegroundBrush}"/>
+                                                <TextBlock Text="{Binding Recommendation}" FontSize="11"
+                                                           Foreground="{DynamicResource MutedForegroundBrush}"
+                                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding ObjectName}" FontSize="11"
+                                                           Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Right"/>
+                                                <TextBlock Text="{Binding Category}" FontSize="10"
+                                                           Foreground="{DynamicResource MutedForegroundBrush}" HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- hvPerf  ─── NEW ─────────────────────────── -->
+                <TabItem Header="hvPerf" Style="{StaticResource HvTab}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="200" MinHeight="120"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Metrics DataGrid -->
+                        <DockPanel Grid.Row="0">
+                            <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+                                <DockPanel LastChildFill="False">
+    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+        <TextBox x:Name="PerfSearch" Style="{StaticResource Input}" Width="200"
+                 TextChanged="SearchBox_TextChanged" Tag="hvPerf"/>
+        <TextBlock Text="  Click a row to see its sparkline →" FontSize="11"
+                   Foreground="{DynamicResource MutedForegroundBrush}" VerticalAlignment="Center"/>
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="18,0,0,0">
+        <TextBlock Text="Refresh:" FontSize="11"
+                   Foreground="{DynamicResource MutedForegroundBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <ComboBox x:Name="PerfRefreshIntervalCombo"
+                  Width="90"
+                  Height="26"
+                  VerticalAlignment="Center"
+                  SelectionChanged="PerfRefreshIntervalCombo_SelectionChanged">
+            <ComboBoxItem Content="Off"/>
+            <ComboBoxItem Content="5 sec"/>
+            <ComboBoxItem Content="10 sec"/>
+            <ComboBoxItem Content="15 sec" IsSelected="True"/>
+            <ComboBoxItem Content="30 sec"/>
+            <ComboBoxItem Content="60 sec"/>
+        </ComboBox>
+    </StackPanel>
+</DockPanel>
+                            </Border>
+                            <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding PerfList}"
+                                      SelectedItem="{Binding SelectedPerfRow, Mode=TwoWay}"
+                                      SelectionChanged="PerfGrid_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Object"   Binding="{Binding ObjectName}"                Width="140"/>
+                                    <DataGridTextColumn Header="Type"     Binding="{Binding ObjectType}"                Width="80"/>
+                                    <DataGridTextColumn Header="Metric"   Binding="{Binding MetricName}"                Width="200"/>
+                                    <DataGridTextColumn Header="Current"  Binding="{Binding CurrentValue, StringFormat=F1}" Width="80"/>
+                                    <DataGridTextColumn Header="Peak"     Binding="{Binding PeakValue,   StringFormat=F1}" Width="80"/>
+                                    <DataGridTextColumn Header="Avg"      Binding="{Binding AvgValue,    StringFormat=F1}" Width="80"/>
+                                    <DataGridTextColumn Header="Unit"     Binding="{Binding Unit}"                      Width="65"/>
+                                    <DataGridTextColumn Header="Trend"    Binding="{Binding Trend}"                     Width="55"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+
+                        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource BorderBrush}"/>
+
+                        <!-- Sparkline Chart -->
+                        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                            <Canvas x:Name="PerfChartCanvas" ClipToBounds="True">
+                                <TextBlock x:Name="PerfChartLabel" Canvas.Left="10" Canvas.Top="8"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource MutedForegroundBrush}"
+                                           Text="Select a row above to view time-series chart"/>
+                            </Canvas>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- hvUpdate  ─── NEW ─────────────────────────── -->
+                <TabItem Header="hvUpdate" Style="{StaticResource HvTab}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="UpdateSearch" Style="{StaticResource Input}" Width="200"
+                                         TextChanged="SearchBox_TextChanged" Tag="hvUpdate"/>
+                                <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0">
+                                    <Run Text="{Binding UpdateList.Count, Mode=OneWay}"
+                                         Foreground="{DynamicResource ForegroundBrush}"/>
+                                    <Run Text=" nodes" Foreground="{DynamicResource MutedForegroundBrush}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding UpdateList}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Node"           Binding="{Binding NodeName}"       Width="150"/>
+                                <DataGridTemplateColumn Header="Readiness"  Width="130">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="3" Padding="4,2" HorizontalAlignment="Left" Margin="2"
+                                                    Background="{Binding Readiness, Converter={StaticResource UpdateColor}}">
+                                                <TextBlock Text="{Binding Readiness}" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource ForegroundBrush}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Pending"        Binding="{Binding PendingCount}"   Width="70"/>
+                                <DataGridTextColumn Header="Critical"       Binding="{Binding CriticalCount}"  Width="70"/>
+                                <DataGridCheckBoxColumn Header="Reboot Req" Binding="{Binding RequiresReboot}" Width="90"/>
+                                <DataGridTextColumn Header="Last Installed" Binding="{Binding LastInstalled, StringFormat='yyyy-MM-dd'}" Width="120"/>
+                                <DataGridTextColumn Header="CAU Last Run"   Binding="{Binding CauLastRun}"     Width="110"/>
+                                <DataGridTextColumn Header="CAU Result"     Binding="{Binding CauLastResult}"  Width="100"/>
+                                <DataGridTextColumn Header="Windows Version" Binding="{Binding WindowsVersion}" Width="200"/>
+                                <DataGridTextColumn Header="Pending KBs"   Binding="{Binding PendingKBs}"     Width="350"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- azArc -->
+                <TabItem Header="azArc" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding ArcList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Resource"      Binding="{Binding ResourceName}"    Width="160"/>
+                            <DataGridTextColumn Header="Type"          Binding="{Binding ResourceType}"    Width="150"/>
+                            <DataGridTextColumn Header="Arc Status"    Binding="{Binding ArcStatus}"       Width="100"/>
+                            <DataGridTextColumn Header="Res. Group"    Binding="{Binding ResourceGroup}"   Width="130"/>
+                            <DataGridTextColumn Header="Region"        Binding="{Binding Region}"          Width="90"/>
+                            <DataGridTextColumn Header="Agent Ver"     Binding="{Binding ArcAgentVersion}" Width="90"/>
+                            <DataGridTextColumn Header="Extensions"    Binding="{Binding Extensions}"      Width="180"/>
+                            <DataGridTextColumn Header="Last Sync"     Binding="{Binding LastSyncTime, StringFormat='yyyy-MM-dd HH:mm'}" Width="130"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- azS2D -->
+                <TabItem Header="azS2D" ToolTip="Azure Stack HCI / S2D pool status and capacity" Style="{StaticResource HvTab}">
+                    <DataGrid Style="{StaticResource IG}" ItemsSource="{Binding S2dList}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Pool"          Binding="{Binding PoolName}"         Width="120"/>
+                            <DataGridTextColumn Header="Health"        Binding="{Binding Health}"           Width="80"/>
+                            <DataGridTextColumn Header="Total (TB)"    Binding="{Binding TotalTB, StringFormat=F2}" Width="80"/>
+                            <DataGridTextColumn Header="Free (TB)"     Binding="{Binding FreeTB,  StringFormat=F2}" Width="80"/>
+                            <DataGridTextColumn Header="Fault Tol."    Binding="{Binding FaultTolerance}"   Width="120"/>
+                            <DataGridTextColumn Header="Drives"        Binding="{Binding TotalDrives}"      Width="60"/>
+                            <DataGridTextColumn Header="Failed"        Binding="{Binding FailedDrives}"     Width="60"/>
+                            <DataGridTextColumn Header="Drive Types"   Binding="{Binding DriveTypes}"       Width="160"/>
+                            <DataGridTextColumn Header="Tiers"         Binding="{Binding TierSummary}"      Width="220"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+            </TabControl>
+        </Grid>
+    </DockPanel>
+</Window>
