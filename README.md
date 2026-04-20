@@ -9,7 +9,6 @@
 
 ## 📸 Screenshots
 
-> Place screenshots in /docs/images/
 
 ### HV Cluster View
 
