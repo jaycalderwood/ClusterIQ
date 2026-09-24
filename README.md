@@ -156,7 +156,7 @@ Run scheduled playbooks without the GUI open:
 ClusterIQ.Headless.exe --install   # from an elevated prompt
 ```
 
-The GUI detects the service lease and yields scheduling to it. Uninstall with `--uninstall`. See `docs/HEADLESS.md` for details.
+The GUI detects the service lease and yields scheduling to it. Uninstall with `--uninstall`. See [docs/HEADLESS.md](docs/HEADLESS.md) for all five CLI modes, connection and service-account setup, GUI coordination, and known limitations.
 
 ---
 
@@ -173,7 +173,7 @@ The GUI detects the service lease and yields scheduling to it. Uninstall with `-
 ## 🧰 Requirements
 
 * Windows
-* .NET 8 Desktop Runtime
+* No .NET install required — release builds are self-contained single-file win-x64 executables (the .NET 8 Desktop Runtime is bundled)
 * Hyper-V / Azure Local environment
 * Admin privileges
 * Network access to hosts
